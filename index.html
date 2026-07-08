@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Safety Training Follow-Up Survey</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:        #1a56db;
+      --blue-light:  #ebf3ff;
+      --blue-dark:   #1035a0;
+      --text:        #1a1a2e;
+      --text-muted:  #5a6072;
+      --text-hint:   #8e95a9;
+      --border:      #d8dce8;
+      --border-hover:#9aabd4;
+      --bg:          #f0f2f8;
+      --white:       #ffffff;
+      --error:       #dc2626;
+      --error-light: #fef2f2;
+      --radius:      12px;
+      --radius-sm:   8px;
+      --touch:       44px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    .page-wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+    }
+
+    /* ── Loading overlay ── */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 1000;
+    }
+    .loading-overlay.hidden { display: none; }
+
+    .spinner-lg {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(26,86,219,0.15);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-text {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ── Header ── */
+    .survey-header {
+      background: linear-gradient(135deg, #1a56db 0%, #1035a0 100%);
+      padding: 2rem 1.5rem 1.75rem;
+      color: white;
+    }
+    .survey-header .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255,255,255,0.18);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+    .survey-header h1 {
+      font-size: clamp(20px, 5vw, 26px);
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+    .survey-header p { font-size: 14px; opacity: 0.82; line-height: 1.5; }
+
+    /* ── Sticky progress ── */
+    .progress-strip {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--white);
+      padding: 10px 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), #4f83f0);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+    .progress-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+      min-width: 58px;
+      text-align: right;
+    }
+
+    /* ── Body ── */
+    .survey-body {
+      background: var(--white);
+      padding: 1.5rem;
+    }
+
+    /* ── Error banner ── */
+    .error-banner {
+      background: var(--error-light);
+      border: 1px solid #fca5a5;
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 1.5rem;
+      font-size: 14px;
+      color: var(--error);
+      display: none;
+    }
+    .error-banner.show { display: block; }
+
+    /* ── Name blocks ── */
+    .name-block {
+      background: var(--blue-light);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+      border: 1px solid #c7d9f8;
+    }
+    .name-block label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--blue-dark);
+      margin-bottom: 8px;
+    }
+    .name-block label .req { color: var(--error); margin-left: 2px; }
+
+    .name-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #a8c4f0;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-family: inherit;
+      color: var(--text);
+      background: white;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+    }
+    .name-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26,86,219,0.12);
+    }
+
+    /* ── Question blocks ── */
+    .q-block {
+      margin-bottom: 2rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid #eef0f5;
+    }
+    .q-block:last-of-type { border-bottom: none; }
+
+    .q-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.5;
+    }
+    .q-num { color: var(--blue); font-weight: 700; flex-shrink: 0; }
+    .q-req { color: var(--error); font-size: 13px; margin-left: 2px; flex-shrink: 0; }
+    .q-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; font-style: italic; }
+
+    .error-msg { font-size: 12px; color: var(--error); margin-top: 8px; display: none; }
+    .error-msg.show { display: block; }
+
+    /* ── Rating cards ── */
+    .dept-cards { display: flex; flex-direction: column; gap: 10px; }
+
+    .dept-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      transition: border-color 0.2s;
+      background: var(--white);
+    }
+    .dept-card.rated { border-color: #a8c4f0; background: #f8fbff; }
+
+    .dept-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .dept-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
+
+    .dept-rating-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 20px;
+      white-space: nowrap;
+      background: #f1f5f9;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .dept-rating-badge.active {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-color: #a8c4f0;
+    }
+
+    .dept-btns { display: flex; gap: 6px; }
+
+    .r-btn {
+      flex: 1;
+      height: var(--touch);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      background: white;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .r-btn:active { transform: scale(0.95); }
+    .r-btn:hover  { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+    .r-btn.sel    { background: var(--blue); border-color: var(--blue); color: white; box-shadow: 0 2px 6px rgba(26,86,219,0.3); }
+
+    /* ── Scale legend ── */
+    .scale-legend {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .scale-legend span {
+      background: #f8f9fd;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+    }
+
+    /* ── Textarea ── */
+    .free-textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-family: inherit;
+      color: var(--text);
+      background: white;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .free-textarea:focus { border-color: var(--blue); }
+
+    /* ── Submit ── */
+    .submit-section {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #eef0f5;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dark) 100%);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .submit-btn:active:not(:disabled) { transform: scale(0.99); }
+    .submit-btn:hover:not(:disabled)  { box-shadow: 0 6px 18px rgba(26,86,219,0.35); transform: translateY(-1px); }
+    .submit-btn:disabled { background: #a0aec0; cursor: not-allowed; transform: none; box-shadow: none; }
+    .submit-note { text-align: center; font-size: 12px; color: var(--text-hint); margin-top: 10px; }
+
+    /* ── End screens (success / blocked) ── */
+    .end-screen {
+      display: none;
+      text-align: center;
+      padding: 4rem 1.5rem;
+    }
+    .end-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      font-size: 36px;
+    }
+    .end-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .end-screen p  { font-size: 14px; color: var(--text-muted); line-height: 1.7; margin-bottom: 24px; }
+
+    .icon-success { background: #f0fdf4; }
+    .icon-blocked { background: var(--error-light); }
+
+    .h2-blocked { color: #991b1b; }
+
+    .new-btn {
+      padding: 12px 28px;
+      background: transparent;
+      border: 1.5px solid var(--blue);
+      color: var(--blue);
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      min-height: var(--touch);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .new-btn:hover { background: var(--blue-light); }
+
+    /* ── Spinner (inline) ── */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile ── */
+    @media (max-width: 540px) {
+      .survey-header  { padding: 1.5rem 1rem 1.25rem; }
+      .survey-body    { padding: 1.25rem 1rem; }
+      .progress-strip { padding: 10px 1rem; }
+      .r-btn          { font-size: 12px; }
+      .name-block     { padding: 1rem; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Full-page loading spinner -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-lg"></div>
+    <div class="loading-text">Loading survey...</div>
+  </div>
+
+  <div class="page-wrap">
+
+    <!-- Header -->
+    <div class="survey-header" id="survey-header" style="display:none">
+      <div class="badge">🔒 Confidential</div>
+      <h1>Safety Training Follow-Up Survey</h1>
+      <p>Your honest feedback helps us improve safety training and day-to-day support. All questions are required.</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-strip" id="progress-strip" style="display:none">
+      <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+      <div class="progress-label" id="prog-label">0 of 14</div>
+    </div>
+
+    <!-- Body -->
+    <div class="survey-body" id="survey-body" style="display:none">
+
+      <div class="error-banner" id="err-banner">
+        ⚠️ Please answer all required questions before submitting.
+      </div>
+
+      <!-- ── Form view ── -->
+      <div id="form-view" style="display:none">
+
+        <div class="name-block">
+          <label for="respondent-name">Your name <span class="req">*</span></label>
+          <input class="name-input" type="text" id="respondent-name"
+                 placeholder="Enter your full name" autocomplete="name">
+          <div class="error-msg" id="name-err">⚠ Please enter your name.</div>
+        </div>
+
+        <div class="name-block" style="margin-top:-0.75rem">
+          <label for="mc-field">MC (Motor Carrier) <span class="req">*</span></label>
+          <input class="name-input" type="text" id="mc-field"
+                 placeholder="Your MC name or number" autocomplete="off">
+          <div class="error-msg" id="mc-err">⚠ Please enter your MC.</div>
+        </div>
+
+        <div class="name-block" style="margin-top:-0.75rem">
+          <label for="role-field">Role / Department <span class="req">*</span></label>
+          <input class="name-input" type="text" id="role-field"
+                 placeholder="e.g. Driver, Dispatcher, Safety, Manager" autocomplete="off">
+          <div class="error-msg" id="role-err">⚠ Please enter your role or department.</div>
+        </div>
+
+        <!-- Q1 -->
+        <div class="q-block" id="block-q1">
+          <div class="q-label"><span class="q-num">Q1.</span> Since the training, what is one thing you've started doing differently? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q1" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q1">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="q-block" id="block-q2">
+          <div class="q-label"><span class="q-num">Q2.</span> Which topic from the training has been the most useful? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q2" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q2">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="q-block" id="block-q3">
+          <div class="q-label"><span class="q-num">Q3.</span> Which topic has been the hardest to apply? Why? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q3" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q3">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="q-block" id="block-q4">
+          <div class="q-label"><span class="q-num">Q4.</span> What safety situations do you face most often? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q4" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q4">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="q-block" id="block-q5">
+          <div class="q-label"><span class="q-num">Q5.</span> What makes it difficult to prioritize safety during your shift? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q5" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q5">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="q-block" id="block-q6">
+          <div class="q-label"><span class="q-num">Q6.</span> What pressures make safe decisions harder? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q6" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q6">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="q-block" id="block-q7">
+          <div class="q-label"><span class="q-num">Q7.</span> If you could change one company process to improve safety, what would it be? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q7" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q7">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="q-block" id="block-q8">
+          <div class="q-label"><span class="q-num">Q8.</span> What additional training or resources would help you? <span class="q-req">*</span></div>
+          <textarea class="free-textarea" id="q8" placeholder="Your answer..."></textarea>
+          <div class="error-msg" id="err-q8">⚠ Please answer this question.</div>
+        </div>
+
+        <!-- Q9 — agreement ratings -->
+        <div class="q-block" id="block-q9">
+          <div class="q-label"><span class="q-num">Q9.</span> How much do you agree with each statement? <span class="q-req">*</span></div>
+          <div class="q-sub">Rate each statement — all rows required.</div>
+          <div class="scale-legend">
+            <span>1 = Strongly Disagree</span><span>2 = Disagree</span>
+            <span>3 = Neutral</span><span>4 = Agree</span><span>5 = Strongly Agree</span>
+          </div>
+          <div class="dept-cards" id="rating-cards"></div>
+          <div class="error-msg" id="err-q9">⚠ Please rate all statements.</div>
+        </div>
+
+        <div class="submit-section">
+          <button class="submit-btn" id="submit-btn" onclick="handleSubmit()">Submit Survey</button>
+          <p class="submit-note">All answers are confidential · Required fields marked *</p>
+        </div>
+      </div>
+      <!-- /form-view -->
+
+      <!-- Success -->
+      <div class="end-screen" id="success-view">
+        <div class="end-icon icon-success">✓</div>
+        <h2>Thank you, <span id="thank-name"></span>!</h2>
+        <p>Your survey has been submitted and saved.<br>We truly appreciate your honest feedback.</p>
+        <button class="new-btn" onclick="location.reload()">Submit another response</button>
+      </div>
+
+      <!-- Blocked -->
+      <div class="end-screen" id="blocked-view">
+        <div class="end-icon icon-blocked">🚫</div>
+        <h2 class="h2-blocked">Submission Limit Reached</h2>
+        <p>The maximum number of submissions from this device has been reached.<br>
+           If you think this is a mistake, please contact your safety manager.</p>
+      </div>
+
+    </div>
+    <!-- /survey-body -->
+  </div>
+  <!-- /page-wrap -->
+
+  <script>
+    // ─── Config ────────────────────────────────────────────────────────────────
+    const SUPABASE_URL = 'https://vyuvrlaszwzobapeafxw.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5dXZybGFzend6b2JhcGVhZnh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1MzgxNzksImV4cCI6MjA5OTExNDE3OX0.IkUWyGyTS6VvuyYGGqK1w4zgwRbfN4nLsE7Y1K8ZikM';
+
+    // One universal link for all MCs. Per-device submission cap:
+    const DEVICE_LIMIT = 300;
+
+    const { createClient } = window.supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ─── Fingerprint ───────────────────────────────────────────────────────────
+    function computeFingerprint() {
+      var parts = [
+        navigator.userAgent || '', navigator.language || '',
+        navigator.platform  || '', String(navigator.hardwareConcurrency || ''),
+        String(screen.colorDepth || ''), screen.width + 'x' + screen.height,
+        String(new Date().getTimezoneOffset())
+      ];
+      try {
+        var c = document.createElement('canvas'), ctx = c.getContext('2d');
+        ctx.textBaseline = 'top'; ctx.font = '13px Arial';
+        ctx.fillStyle = '#1e3a8a'; ctx.fillText('fp\u{1F6E1}', 2, 2);
+        parts.push(c.toDataURL().slice(-60));
+      } catch(e) {}
+      var str = parts.join('||'), h = 0;
+      for (var i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+      return Math.abs(h).toString(36);
+    }
+    const FINGERPRINT = computeFingerprint();
+
+    // ─── Screen management ─────────────────────────────────────────────────────
+    function showScreen(name) {
+      var isForm = name === 'form';
+      document.getElementById('survey-header').style.display  = 'block';
+      document.getElementById('survey-body').style.display    = 'block';
+      document.getElementById('progress-strip').style.display = isForm ? 'flex' : 'none';
+
+      ['form', 'success', 'blocked'].forEach(function(s) {
+        var el = document.getElementById(s + '-view');
+        if (el) el.style.display = (s === name) ? 'block' : 'none';
+      });
+    }
+
+    function hideLoading() {
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    // ─── Survey initialisation ─────────────────────────────────────────────────
+    async function initSurvey() {
+      try {
+        var deviceRes = await sb
+          .from('device_submissions')
+          .select('id', { count: 'exact', head: true })
+          .eq('fingerprint', FINGERPRINT);
+
+        if ((deviceRes.count || 0) >= DEVICE_LIMIT) {
+          hideLoading(); showScreen('blocked'); return;
+        }
+
+        hideLoading(); showScreen('form'); updateProgress();
+
+      } catch (err) {
+        console.error('Init error:', err);
+        hideLoading(); showScreen('form'); updateProgress();
+      }
+    }
+
+    // ─── Rating cards ──────────────────────────────────────────────────────────
+    var STATEMENTS = [
+      { key: 'escalate',            text: 'I understand when to escalate a safety concern.' },
+      { key: 'confident_discussing', text: 'I feel confident discussing safety with drivers.' },
+      { key: 'safety_vs_ops',       text: 'I know what to do when safety conflicts with operational demands.' }
+    ];
+
+    var RATING_LABELS = {
+      1: 'Strongly Disagree', 2: 'Disagree', 3: 'Neutral',
+      4: 'Agree', 5: 'Strongly Agree'
+    };
+
+    var ratings = {};
+
+    STATEMENTS.forEach(function(st) {
+      ratings[st.key] = null;
+
+      var card   = document.createElement('div');
+      var cardId = 'card_' + st.key;
+
+      card.className = 'dept-card';
+      card.id        = cardId;
+
+      var html = '<div class="dept-card-top">'
+        + '<div class="dept-name">' + st.text + '</div>'
+        + '<div class="dept-rating-badge" id="badge_' + cardId + '">Not rated</div>'
+        + '</div><div class="dept-btns">';
+
+      for (var i = 1; i <= 5; i++) {
+        html += '<button type="button" class="r-btn" id="rbtn_' + cardId + '_' + i + '" '
+              + 'onclick="setRating(\'' + st.key + '\',' + i + ',\'' + cardId + '\')">'
+              + i + '</button>';
+      }
+
+      html += '</div>';
+      card.innerHTML = html;
+      document.getElementById('rating-cards').appendChild(card);
+    });
+
+    function setRating(key, val, cardId) {
+      ratings[key] = val;
+      for (var i = 1; i <= 5; i++) {
+        var b = document.getElementById('rbtn_' + cardId + '_' + i);
+        if (b) b.classList.toggle('sel', i === val);
+      }
+      var badge = document.getElementById('badge_' + cardId);
+      if (badge) { badge.textContent = val + ' – ' + RATING_LABELS[val]; badge.classList.add('active'); }
+      var card = document.getElementById(cardId);
+      if (card) card.classList.add('rated');
+      document.getElementById('err-q9').classList.remove('show');
+      updateProgress();
+    }
+
+    // ─── Text questions ────────────────────────────────────────────────────────
+    var TEXT_QS = ['q1','q2','q3','q4','q5','q6','q7','q8'];
+
+    TEXT_QS.forEach(function(q) {
+      document.getElementById(q).addEventListener('input', function() {
+        document.getElementById('err-' + q).classList.remove('show');
+        updateProgress();
+      });
+    });
+
+    ['respondent-name','mc-field','role-field'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', function() {
+        var errId = id === 'respondent-name' ? 'name-err'
+                  : id === 'mc-field' ? 'mc-err' : 'role-err';
+        document.getElementById(errId).classList.remove('show');
+        updateProgress();
+      });
+    });
+
+    // ─── Progress ──────────────────────────────────────────────────────────────
+    function updateProgress() {
+      var done = 0, total = 14;
+      if (document.getElementById('respondent-name').value.trim()) done++;
+      if (document.getElementById('mc-field').value.trim()) done++;
+      if (document.getElementById('role-field').value.trim()) done++;
+      TEXT_QS.forEach(function(q) { if (document.getElementById(q).value.trim()) done++; });
+      STATEMENTS.forEach(function(st) { if (ratings[st.key] !== null) done++; });
+      document.getElementById('prog-fill').style.width  = Math.round((done / total) * 100) + '%';
+      document.getElementById('prog-label').textContent = done + ' of ' + total;
+    }
+
+    // ─── Validation ────────────────────────────────────────────────────────────
+    function validate() {
+      var valid = true, firstError = null;
+
+      function fail(errEl, focusEl) {
+        errEl.classList.add('show');
+        if (!firstError) firstError = focusEl;
+        valid = false;
+      }
+
+      if (!document.getElementById('respondent-name').value.trim())
+        fail(document.getElementById('name-err'), document.getElementById('respondent-name'));
+      if (!document.getElementById('mc-field').value.trim())
+        fail(document.getElementById('mc-err'), document.getElementById('mc-field'));
+      if (!document.getElementById('role-field').value.trim())
+        fail(document.getElementById('role-err'), document.getElementById('role-field'));
+
+      TEXT_QS.forEach(function(q) {
+        if (!document.getElementById(q).value.trim())
+          fail(document.getElementById('err-' + q), document.getElementById('block-' + q));
+      });
+
+      if (!STATEMENTS.every(function(st) { return ratings[st.key] !== null; }))
+        fail(document.getElementById('err-q9'), document.getElementById('block-q9'));
+
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return valid;
+    }
+
+    // ─── Submit ────────────────────────────────────────────────────────────────
+    async function handleSubmit() {
+      document.getElementById('err-banner').classList.remove('show');
+      if (!validate()) {
+        document.getElementById('err-banner').classList.add('show');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      var btn = document.getElementById('submit-btn');
+      btn.disabled  = true;
+      btn.innerHTML = '<span class="spinner"></span>Submitting...';
+
+      var name = document.getElementById('respondent-name').value.trim();
+      var val  = function(id) { return document.getElementById(id).value.trim(); };
+
+      try {
+        // Track this device submission (for the per-device cap)
+        var devRes = await sb.from('device_submissions').insert({ fingerprint: FINGERPRINT });
+        if (devRes.error) throw devRes.error;
+
+        var row = {
+          respondent_name: name,
+          mc:   val('mc-field'),
+          role: val('role-field'),
+          q1_started_differently: val('q1'),
+          q2_most_useful:         val('q2'),
+          q3_hardest_topic:       val('q3'),
+          q4_common_situations:   val('q4'),
+          q5_hard_to_prioritize:  val('q5'),
+          q6_pressures:           val('q6'),
+          q7_process_change:      val('q7'),
+          q8_additional_training: val('q8'),
+          rating_escalate:             ratings.escalate,
+          rating_confident_discussing: ratings.confident_discussing,
+          rating_safety_vs_ops:        ratings.safety_vs_ops,
+          fingerprint: FINGERPRINT
+        };
+
+        var respRes = await sb.from('survey_responses').insert(row);
+        if (respRes.error) throw respRes.error;
+
+        document.getElementById('thank-name').textContent = name;
+        showScreen('success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      } catch (err) {
+        console.error('Submit error:', err);
+        btn.disabled  = false;
+        btn.innerHTML = 'Submit Survey';
+        alert('Submission failed. Please check your connection and try again.');
+      }
+    }
+
+    // ─── Start ────────────────────────────────────────────────────────────────
+    initSurvey();
+  </script>
+</body>
+</html>
