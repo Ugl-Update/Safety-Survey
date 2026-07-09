@@ -553,9 +553,9 @@
     // One universal link for all MCs. Per-device submission cap:
     const DEVICE_LIMIT = 300;
 
-    // Google Sheet mirror via Apps Script web app. Supabase stays the source of truth;
-    // this is a best-effort copy so failures here never block a submission.
-    const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbw8H53y3U_mFtw5HYw0Xe55Ft0aMfA5SizrpoV8KrK7P7XWM5kk23yi-MCosRJeEyxvNA/exec';
+    // Google Sheet sync happens server-side: a database trigger calls the
+    // `sheets-proxy` edge function on every insert, and the `sync-to-sheets`
+    // cron worker retries any rows that failed to reach the sheet.
 
     const { createClient } = window.supabase;
     const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -730,22 +730,6 @@
       return valid;
     }
 
-    // ─── Google Sheet mirror ───────────────────────────────────────────────────
-    // Fire-and-forget POST to the Apps Script web app. `no-cors` avoids a CORS
-    // preflight; we can't read the response, but the row still reaches the sheet.
-    function sendToSheet(payload) {
-      try {
-        fetch(SHEET_WEBAPP_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-      } catch (e) {
-        console.error('Sheet mirror error:', e);
-      }
-    }
-
     // ─── Submit ────────────────────────────────────────────────────────────────
     async function handleSubmit() {
       document.getElementById('err-banner').classList.remove('show');
@@ -787,9 +771,6 @@
 
         var respRes = await sb.from('survey_responses').insert(row);
         if (respRes.error) throw respRes.error;
-
-        // Mirror to Google Sheet (best-effort; data is already safe in Supabase)
-        sendToSheet(row);
 
         document.getElementById('thank-name').textContent = name;
         showScreen('success');
