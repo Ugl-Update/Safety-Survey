@@ -518,6 +518,12 @@
           <div class="error-msg" id="err-q9">⚠ Please rate all statements.</div>
         </div>
 
+        <!-- Q10 (optional) -->
+        <div class="q-block" id="block-q10">
+          <div class="q-label"><span class="q-num">Q10.</span> Do you have any suggestions or recommendations regarding safety matters? <span style="color:var(--text-hint); font-weight:500; font-size:12px;">(optional)</span></div>
+          <textarea class="free-textarea" id="q10" placeholder="Your answer... (optional)"></textarea>
+        </div>
+
         <div class="submit-section">
           <button class="submit-btn" id="submit-btn" onclick="handleSubmit()">Submit Survey</button>
           <p class="submit-note">All answers are confidential · Required fields marked *</p>
@@ -766,6 +772,7 @@
           rating_escalate:             ratings.escalate,
           rating_confident_discussing: ratings.confident_discussing,
           rating_safety_vs_ops:        ratings.safety_vs_ops,
+          q10_suggestions: val('q10'),
           fingerprint: FINGERPRINT
         };
 
